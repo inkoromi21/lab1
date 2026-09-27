@@ -1,0 +1,121 @@
+<Window x:Class="WpfApp1.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Лабораторная работа №2 — Сортировка" Height="790" Width="1180"
+        MinHeight="650" MinWidth="950" Background="#F4F6FA" FontFamily="Segoe UI">
+  <Window.Resources>
+    <Style TargetType="GroupBox">
+      <Setter Property="Margin" Value="8" />
+      <Setter Property="Padding" Value="12" />
+      <Setter Property="Background" Value="White" />
+      <Setter Property="BorderBrush" Value="#C9D3E4" />
+    </Style>
+    <Style TargetType="Button">
+      <Setter Property="Padding" Value="12,6" />
+      <Setter Property="Margin" Value="3" />
+    </Style>
+    <DataTemplate DataType="{x:Type local:BarItem}" xmlns:local="clr-namespace:WpfApp1">
+      <Grid Width="{Binding Width}" Height="275" Margin="1">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="*" />
+          <RowDefinition Height="34" />
+        </Grid.RowDefinitions>
+        <Border Grid.Row="0" Height="{Binding Height}" Background="#4177C4"
+                VerticalAlignment="Bottom" CornerRadius="2,2,0,0" />
+        <TextBlock Grid.Row="1" Text="{Binding Label}" FontSize="9" TextAlignment="Center"
+                   TextWrapping="Wrap" Height="30" Margin="0,4,0,0" />
+      </Grid>
+    </DataTemplate>
+  </Window.Resources>
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Background="#213A63" Padding="20,12">
+      <StackPanel>
+        <TextBlock Text="Сравнение алгоритмов сортировки" Foreground="White" FontSize="24" FontWeight="SemiBold" />
+        <TextBlock Text="Алгоритмы выполняются последовательно. Для набора меньше 50 чисел показывается анимация." Foreground="#D7E4FA" />
+      </StackPanel>
+    </Border>
+    <Grid Margin="10">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="325" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="*" />
+        <RowDefinition Height="175" />
+      </Grid.RowDefinitions>
+      <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+        <StackPanel>
+          <GroupBox Header="Исходные данные">
+            <StackPanel>
+              <TextBlock Text="Введите числа вручную в таблицу или создайте случайный набор." Foreground="#596579" TextWrapping="Wrap" />
+              <DataGrid x:Name="NumbersGrid" Height="175" AutoGenerateColumns="False" CanUserAddRows="True" CanUserDeleteRows="True" Margin="0,8,0,4">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Header="Число" Binding="{Binding Value, UpdateSourceTrigger=PropertyChanged}" Width="*" />
+                </DataGrid.Columns>
+              </DataGrid>
+              <Grid Margin="0,6,0,0">
+                <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0"><TextBlock Text="Количество" /><TextBox x:Name="CountBox" Text="20" /></StackPanel>
+                <StackPanel Grid.Column="1" Margin="5,0"><TextBlock Text="Минимум" /><TextBox x:Name="MinBox" Text="-100" /></StackPanel>
+                <StackPanel Grid.Column="2"><TextBlock Text="Максимум" /><TextBox x:Name="MaxBox" Text="100" /></StackPanel>
+              </Grid>
+              <Button Content="Сгенерировать набор" Click="GenerateClick" HorizontalAlignment="Left" Margin="0,8,0,0" />
+              <TextBlock Text="Загрузка данных" FontWeight="SemiBold" Margin="0,10,0,2" />
+              <WrapPanel>
+                <Button Content="Загрузить из файла" Click="ImportFileClick" Margin="0,0,4,0" />
+                <Button Content="Загрузить Google Таблицу" Click="ImportGoogleClick" Margin="0" />
+              </WrapPanel>
+              <Button Content="Очистить данные" Click="ClearClick" HorizontalAlignment="Left" Margin="0,6,0,0" />
+            </StackPanel>
+          </GroupBox>
+          <GroupBox Header="Алгоритмы">
+            <StackPanel>
+              <CheckBox x:Name="BubbleCheck" Content="Пузырьковая сортировка" IsChecked="True" />
+              <CheckBox x:Name="InsertionCheck" Content="Сортировка вставками" IsChecked="True" />
+              <CheckBox x:Name="ShakerCheck" Content="Шейкерная сортировка" IsChecked="True" />
+              <CheckBox x:Name="QuickCheck" Content="Быстрая сортировка" IsChecked="True" />
+              <CheckBox x:Name="BogoCheck" Content="BOGO-сортировка" />
+              <WrapPanel Margin="0,6,0,0">
+                <TextBlock Text="Лимит BOGO:" VerticalAlignment="Center" />
+                <TextBox x:Name="BogoLimitBox" Text="100000" Width="100" Margin="6,0,0,0" />
+              </WrapPanel>
+            </StackPanel>
+          </GroupBox>
+          <GroupBox Header="Параметры">
+            <StackPanel>
+              <RadioButton x:Name="AscendingRadio" Content="По возрастанию" IsChecked="True" />
+              <RadioButton x:Name="DescendingRadio" Content="По убыванию" />
+              <CheckBox x:Name="AnimationCheck" Content="Показывать анимацию" IsChecked="True" />
+              <TextBlock x:Name="StatusText" Text="Готово к работе" Foreground="#285B35" Margin="0,10,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+          </GroupBox>
+          <Button Content="Запустить сортировку" Click="RunClick" Background="#284F88" Foreground="White"
+                  BorderBrush="#1B3965" FontWeight="SemiBold" HorizontalAlignment="Stretch" Margin="8,4" />
+        </StackPanel>
+      </ScrollViewer>
+      <GroupBox Grid.Column="1" Header="Визуализация сортировки">
+        <Grid>
+          <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+          <TextBlock x:Name="ChartTitleText" Text="Выберите алгоритмы и запустите сортировку" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8" />
+          <ScrollViewer x:Name="ChartScrollViewer" Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
+                        VerticalScrollBarVisibility="Disabled" SizeChanged="ChartScrollViewerSizeChanged">
+            <ItemsControl x:Name="ChartBars" ItemsSource="{Binding Bars}">
+              <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            </ItemsControl>
+          </ScrollViewer>
+        </Grid>
+      </GroupBox>
+      <GroupBox Grid.Row="1" Grid.ColumnSpan="2" Header="Результаты измерений">
+        <DataGrid x:Name="ResultsGrid" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False">
+          <DataGrid.Columns>
+            <DataGridTextColumn Header="Алгоритм" Binding="{Binding AlgorithmName}" Width="*" />
+            <DataGridTextColumn Header="Чисел" Binding="{Binding ElementCount}" Width="90" />
+            <DataGridTextColumn Header="Время, мс" Binding="{Binding ElapsedMilliseconds}" Width="120" />
+            <DataGridTextColumn Header="Итераций" Binding="{Binding IterationCount}" Width="120" />
+            <DataGridTextColumn Header="Результат" Binding="{Binding Status}" Width="2*" />
+          </DataGrid.Columns>
+        </DataGrid>
+      </GroupBox>
+    </Grid>
+  </DockPanel>
+</Window>
