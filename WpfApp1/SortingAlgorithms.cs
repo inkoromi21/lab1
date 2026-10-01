@@ -1,22 +1,32 @@
 namespace WpfApp1;
 
 public static class SortingAlgorithms {
-  public static SortExecution BubbleSort(List<double> values, bool isAscending, int unusedLimit) {
+  public static SortExecution BubbleSort(List<double> values, bool isAscending, int unusedLimit, bool captureSnapshots, int unusedRandomSeed) {
     SortExecution execution = new SortExecution();
+
+    if (values.Count == 1) {
+      ++execution.IterationCount;
+      if (captureSnapshots) {
+        execution.SaveSnapshot(values);
+      }
+
+      return execution;
+    }
 
     for (int passIndex = 0; passIndex < values.Count - 1; ++passIndex) {
       bool hasSwapped = false;
 
       for (int elementIndex = 0; elementIndex < values.Count - 1 - passIndex; ++elementIndex) {
-        ++execution.IterationCount;
-
         if (IsWrongOrder(values[elementIndex], values[elementIndex + 1], isAscending)) {
           Swap(values, elementIndex, elementIndex + 1);
           hasSwapped = true;
         }
       }
 
-      execution.SaveSnapshot(values);
+      ++execution.IterationCount;
+      if (captureSnapshots) {
+        execution.SaveSnapshot(values);
+      }
 
       if (!hasSwapped) {
         break;
@@ -26,7 +36,7 @@ public static class SortingAlgorithms {
     return execution;
   }
 
-  public static SortExecution InsertionSort(List<double> values, bool isAscending, int unusedLimit) {
+  public static SortExecution InsertionSort(List<double> values, bool isAscending, int unusedLimit, bool captureSnapshots, int unusedRandomSeed) {
     SortExecution execution = new SortExecution();
 
     for (int currentIndex = 1; currentIndex < values.Count; ++currentIndex) {
@@ -36,27 +46,40 @@ public static class SortingAlgorithms {
       while (insertIndex >= 0 && IsWrongOrder(values[insertIndex], currentValue, isAscending)) {
         values[insertIndex + 1] = values[insertIndex];
         --insertIndex;
-        ++execution.IterationCount;
       }
 
       values[insertIndex + 1] = currentValue;
-      execution.SaveSnapshot(values);
+      ++execution.IterationCount;
+      if (captureSnapshots) {
+        execution.SaveSnapshot(values);
+      }
     }
 
     return execution;
   }
 
-  public static SortExecution ShakerSort(List<double> values, bool isAscending, int unusedLimit) {
+  public static SortExecution ShakerSort(List<double> values, bool isAscending, int unusedLimit, bool captureSnapshots, int unusedRandomSeed) {
     SortExecution execution = new SortExecution();
     int leftIndex = 0;
     int rightIndex = values.Count - 1;
 
+    if (values.Count == 1) {
+      ++execution.IterationCount;
+      if (captureSnapshots) {
+        execution.SaveSnapshot(values);
+      }
+
+      return execution;
+    }
+
     while (leftIndex < rightIndex) {
+      bool hasSwapped = false;
+
       for (int elementIndex = leftIndex; elementIndex < rightIndex; ++elementIndex) {
         if (IsWrongOrder(values[elementIndex], values[elementIndex + 1], isAscending)) {
           Swap(values, elementIndex, elementIndex + 1);
+          hasSwapped = true;
         }
-        ++execution.IterationCount;
       }
 
       --rightIndex;
@@ -64,26 +87,33 @@ public static class SortingAlgorithms {
       for (int elementIndex = rightIndex; elementIndex > leftIndex; --elementIndex) {
         if (IsWrongOrder(values[elementIndex - 1], values[elementIndex], isAscending)) {
           Swap(values, elementIndex - 1, elementIndex);
+          hasSwapped = true;
         }
-        ++execution.IterationCount;
       }
 
       ++leftIndex;
-      execution.SaveSnapshot(values);
+      ++execution.IterationCount;
+      if (captureSnapshots) {
+        execution.SaveSnapshot(values);
+      }
+
+      if (!hasSwapped) {
+        break;
+      }
     }
 
     return execution;
   }
 
-  public static SortExecution QuickSort(List<double> values, bool isAscending, int unusedLimit) {
+  public static SortExecution QuickSort(List<double> values, bool isAscending, int unusedLimit, bool captureSnapshots, int unusedRandomSeed) {
     SortExecution execution = new SortExecution();
-    SortPart(values, 0, values.Count - 1, isAscending, execution);
+    SortPart(values, 0, values.Count - 1, isAscending, captureSnapshots, execution);
     return execution;
   }
 
-  public static SortExecution BogoSort(List<double> values, bool isAscending, int iterationLimit) {
+  public static SortExecution BogoSort(List<double> values, bool isAscending, int iterationLimit, bool captureSnapshots, int randomSeed) {
     SortExecution execution = new SortExecution();
-    Random random = new Random();
+    Random random = new Random(randomSeed);
 
     while (!IsSorted(values, isAscending) && execution.IterationCount < iterationLimit) {
       for (int elementIndex = values.Count - 1; elementIndex > 0; --elementIndex) {
@@ -92,14 +122,16 @@ public static class SortingAlgorithms {
       }
 
       ++execution.IterationCount;
-      execution.SaveSnapshot(values);
+      if (captureSnapshots) {
+        execution.SaveSnapshot(values);
+      }
     }
 
     execution.IsCompleted = IsSorted(values, isAscending);
     return execution;
   }
 
-  private static void SortPart(List<double> values, int leftIndex, int rightIndex, bool isAscending, SortExecution execution) {
+  private static void SortPart(List<double> values, int leftIndex, int rightIndex, bool isAscending, bool captureSnapshots, SortExecution execution) {
     if (leftIndex >= rightIndex) {
       return;
     }
@@ -107,29 +139,30 @@ public static class SortingAlgorithms {
     double pivotValue = values[(leftIndex + rightIndex) / 2];
     int currentLeftIndex = leftIndex;
     int currentRightIndex = rightIndex;
+    ++execution.IterationCount;
 
     while (currentLeftIndex <= currentRightIndex) {
       while (IsBefore(values[currentLeftIndex], pivotValue, isAscending)) {
         ++currentLeftIndex;
-        ++execution.IterationCount;
       }
 
       while (IsBefore(pivotValue, values[currentRightIndex], isAscending)) {
         --currentRightIndex;
-        ++execution.IterationCount;
       }
 
       if (currentLeftIndex <= currentRightIndex) {
         Swap(values, currentLeftIndex, currentRightIndex);
         ++currentLeftIndex;
         --currentRightIndex;
-        ++execution.IterationCount;
       }
     }
 
-    execution.SaveSnapshot(values);
-    SortPart(values, leftIndex, currentRightIndex, isAscending, execution);
-    SortPart(values, currentLeftIndex, rightIndex, isAscending, execution);
+    if (captureSnapshots) {
+      execution.SaveSnapshot(values);
+    }
+
+    SortPart(values, leftIndex, currentRightIndex, isAscending, captureSnapshots, execution);
+    SortPart(values, currentLeftIndex, rightIndex, isAscending, captureSnapshots, execution);
   }
 
   private static bool IsWrongOrder(double leftValue, double rightValue, bool isAscending) {

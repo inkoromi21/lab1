@@ -1,16 +1,21 @@
 using Microsoft.Win32;
+using Microsoft.VisualBasic.FileIO;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Xml.Linq;
 
 namespace WpfApp1;
 
 public partial class MainWindow : Window {
-  private const int MaximumInputCount = 100000;
+  private const int MaximumInputCount = 50000;
   private const int MaximumBogoElementCount = 11;
   private const int MinimumBogoIterations = 1;
   private const int MaximumBogoIterations = 10000000;
@@ -20,6 +25,7 @@ public partial class MainWindow : Window {
   private readonly ObservableCollection<SortResult> _sortResults = new ObservableCollection<SortResult>();
   private readonly ChartData _chartData = new ChartData();
   private readonly Random _random = new Random();
+  private bool _isRunning;
 
   public MainWindow() {
     InitializeComponent();
@@ -43,15 +49,18 @@ public partial class MainWindow : Window {
 
     try {
       string fileExtension = Path.GetExtension(dialog.FileName);
-      string fileText;
+      List<double> values;
 
       if (fileExtension.Equals(".xlsx", StringComparison.OrdinalIgnoreCase)) {
-        fileText = ReadExcelValues(dialog.FileName);
+        values = ReadExcelValues(dialog.FileName);
+      } else if (fileExtension.Equals(".csv", StringComparison.OrdinalIgnoreCase)) {
+        string fileText = File.ReadAllText(dialog.FileName);
+        values = ReadCsvValues(fileText, DetectCsvDelimiter(fileText));
       } else {
-        fileText = File.ReadAllText(dialog.FileName);
+        values = ReadTextValues(File.ReadAllText(dialog.FileName));
       }
 
-      LoadValues(fileText);
+      LoadValues(values);
       StatusText.Text = "Данные загружены из файла.";
     } catch (Exception exception) {
       ShowInputError("Не удалось прочитать файл: " + exception.Message);
@@ -72,7 +81,7 @@ public partial class MainWindow : Window {
       string fileText = await httpClient.GetStringAsync(sourceUrl);
       httpClient.Dispose();
 
-      LoadValues(fileText);
+      LoadValues(ReadCsvValues(fileText, ","));
       StatusText.Text = "Данные загружены из Google Таблицы.";
     } catch (Exception exception) {
       ShowInputError("Не удалось загрузить таблицу. Откройте доступ по ссылке.\n" + exception.Message);
@@ -80,9 +89,17 @@ public partial class MainWindow : Window {
   }
 
   private async void RunClick(object sender, RoutedEventArgs eventArgs) {
-    List<double> sourceValues = ReadGridValues();
+    if (_isRunning) {
+      return;
+    }
+
+    List<double> sourceValues;
     List<SortRequest> selectedAlgorithms = GetSelectedAlgorithms();
     int bogoLimit;
+
+    if (!TryReadGridValues(out sourceValues)) {
+      return;
+    }
 
     if (sourceValues.Count == 0) {
       ShowInputError("Добавьте хотя бы одно число.");
@@ -103,22 +120,42 @@ public partial class MainWindow : Window {
       return;
     }
 
-    _sortResults.Clear();
-    _chartData.Bars.Clear();
     bool isAscending = AscendingRadio.IsChecked == true;
+    bool showAnimation = AnimationCheck.IsChecked == true;
 
-    foreach (SortRequest request in selectedAlgorithms) {
-      List<double> sortedValues = new List<double>(sourceValues);
-      DateTime startTime = DateTime.Now;
-      SortExecution execution = request.SortMethod(sortedValues, isAscending, bogoLimit);
-      DateTime endTime = DateTime.Now;
-      double elapsedMilliseconds = (endTime - startTime).TotalMilliseconds;
+    _isRunning = true;
+    InputPanel.IsEnabled = false;
 
-      await AnimateAlgorithm(request.AlgorithmName, sourceValues, sortedValues, execution);
-      AddSortResult(request.AlgorithmName, sourceValues.Count, elapsedMilliseconds, execution);
+    try {
+      _sortResults.Clear();
+      _chartData.Bars.Clear();
+
+      foreach (SortRequest request in selectedAlgorithms) {
+        List<double> sortedValues = new List<double>(sourceValues);
+        int randomSeed = _random.Next();
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        SortExecution execution = request.SortMethod(sortedValues, isAscending, bogoLimit, false, randomSeed);
+        stopwatch.Stop();
+        double elapsedMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
+        SortExecution animationExecution = execution;
+
+        if (showAnimation && sourceValues.Count <= MaximumAnimatedElementCount) {
+          List<double> animationValues = new List<double>(sourceValues);
+          animationExecution = request.SortMethod(animationValues, isAscending, bogoLimit, true, randomSeed);
+        }
+
+        await AnimateAlgorithm(request.AlgorithmName, sourceValues, sortedValues, animationExecution);
+        AddSortResult(request.AlgorithmName, sourceValues.Count, elapsedMilliseconds, execution);
+      }
+
+      StatusText.Text = "Сортировка завершена. Быстрее в этом запуске: " + GetFastestAlgorithmName() + ".";
+    } catch (Exception exception) {
+      StatusText.Text = "Сортировка прервана из-за ошибки.";
+      ShowInputError("Не удалось выполнить сортировку: " + exception.Message);
+    } finally {
+      InputPanel.IsEnabled = true;
+      _isRunning = false;
     }
-
-    StatusText.Text = "Сортировка завершена. Самый быстрый: " + GetFastestAlgorithmName() + ".";
   }
 
   private void ClearClick(object sender, RoutedEventArgs eventArgs) {
@@ -131,6 +168,34 @@ public partial class MainWindow : Window {
 
   private void ChartScrollViewerSizeChanged(object sender, SizeChangedEventArgs eventArgs) {
     UpdateChartBarWidths();
+  }
+
+  private void NumberBoxPreviewTextInput(object sender, TextCompositionEventArgs eventArgs) {
+    TextBox numberBox = (TextBox)sender;
+    string candidate = GetEditedNumber(numberBox, eventArgs.Text);
+    eventArgs.Handled = !IsAllowedNumberInput(candidate);
+  }
+
+  private void NumberBoxPasting(object sender, DataObjectPastingEventArgs eventArgs) {
+    TextBox numberBox = (TextBox)sender;
+    string? pastedText = eventArgs.DataObject.GetData(DataFormats.UnicodeText) as string;
+
+    if (pastedText == null) {
+      pastedText = eventArgs.DataObject.GetData(DataFormats.Text) as string;
+    }
+
+    if (pastedText == null || !IsAllowedNumberInput(GetEditedNumber(numberBox, pastedText))) {
+      eventArgs.CancelCommand();
+    }
+  }
+
+  private static string GetEditedNumber(TextBox numberBox, string newText) {
+    string remainingText = numberBox.Text.Remove(numberBox.SelectionStart, numberBox.SelectionLength);
+    return remainingText.Insert(numberBox.SelectionStart, newText);
+  }
+
+  private static bool IsAllowedNumberInput(string text) {
+    return Regex.IsMatch(text, @"\A-?[0-9]*[.,]?[0-9]*\z");
   }
 
   private void GenerateValues() {
@@ -161,21 +226,41 @@ public partial class MainWindow : Window {
     for (int elementIndex = 0; elementIndex < valueCount; ++elementIndex) {
       double value = minimumValue + _random.NextDouble() * (maximumValue - minimumValue);
       NumberRow row = new NumberRow();
-      row.Value = Math.Round(value, decimalPlaces);
+      row.ValueText = Math.Round(value, decimalPlaces).ToString(CultureInfo.CurrentCulture);
       _numberRows.Add(row);
     }
 
     StatusText.Text = "Сгенерировано чисел: " + valueCount + ".";
   }
 
-  private List<double> ReadGridValues() {
-    List<double> values = new List<double>();
+  private bool TryReadGridValues(out List<double> values) {
+    values = new List<double>();
 
-    foreach (NumberRow row in _numberRows) {
-      values.Add(row.Value);
+    if (!NumbersGrid.CommitEdit(DataGridEditingUnit.Cell, true) ||
+        !NumbersGrid.CommitEdit(DataGridEditingUnit.Row, true)) {
+      ShowInputError("Завершите ввод числа в таблице.");
+      return false;
     }
 
-    return values;
+    for (int rowIndex = 0; rowIndex < _numberRows.Count; ++rowIndex) {
+      string valueText = _numberRows[rowIndex].ValueText;
+
+      if (valueText == "" || valueText == "-" || valueText == "." || valueText == "," ||
+          valueText == "-." || valueText == "-,") {
+        continue;
+      }
+
+      double value;
+
+      if (!IsAllowedNumberInput(valueText) || !TryParseNumber(valueText, out value)) {
+        ShowInputError("Строка " + (rowIndex + 1) + ": введите число без букв и посторонних символов.");
+        return false;
+      }
+
+      values.Add(value);
+    }
+
+    return true;
   }
 
   private List<SortRequest> GetSelectedAlgorithms() {
@@ -208,7 +293,7 @@ public partial class MainWindow : Window {
     SortResult result = new SortResult();
     result.AlgorithmName = algorithmName;
     result.ElementCount = elementCount;
-    result.ElapsedMilliseconds = Math.Round(elapsedMilliseconds, 4);
+    result.ElapsedMilliseconds = elapsedMilliseconds;
     result.IterationCount = execution.IterationCount;
     result.Status = execution.IsCompleted ? "Отсортировано" : "Остановлено по лимиту BOGO";
     _sortResults.Add(result);
@@ -297,17 +382,7 @@ public partial class MainWindow : Window {
     }
   }
 
-  private void LoadValues(string text) {
-    string numberTokenPattern = "[;\\s,]+";
-    string[] tokens = Regex.Split(text, numberTokenPattern);
-    List<double> values = new List<double>();
-
-    foreach (string token in tokens) {
-      if (token.Length > 0) {
-        values.Add(ParseNumber(token));
-      }
-    }
-
+  private void LoadValues(List<double> values) {
     if (values.Count == 0) {
       throw new InvalidOperationException("Числа не найдены.");
     }
@@ -316,9 +391,83 @@ public partial class MainWindow : Window {
 
     foreach (double value in values) {
       NumberRow row = new NumberRow();
-      row.Value = value;
+      row.ValueText = value.ToString(CultureInfo.CurrentCulture);
       _numberRows.Add(row);
     }
+  }
+
+  private static List<double> ReadTextValues(string text) {
+    List<double> values = new List<double>();
+    using StringReader reader = new StringReader(text);
+    string? line;
+
+    while ((line = reader.ReadLine()) != null) {
+      string[] fields = Regex.Split(line.Trim(), @"[;\s]+");
+      AddNumericRow(fields, values);
+    }
+
+    return values;
+  }
+
+  private static List<double> ReadCsvValues(string text, string delimiter) {
+    List<double> values = new List<double>();
+    using StringReader reader = new StringReader(text);
+    using TextFieldParser parser = new TextFieldParser(reader);
+    parser.SetDelimiters(delimiter);
+    parser.HasFieldsEnclosedInQuotes = true;
+
+    while (!parser.EndOfData) {
+      string[]? fields = parser.ReadFields();
+
+      if (fields != null) {
+        AddNumericRow(fields, values);
+      }
+    }
+
+    return values;
+  }
+
+  private static string DetectCsvDelimiter(string text) {
+    using StringReader reader = new StringReader(text);
+    string? line;
+
+    while ((line = reader.ReadLine()) != null) {
+      if (line.Trim().Length == 0) {
+        continue;
+      }
+
+      if (line.Contains(';')) {
+        return ";";
+      }
+
+      if (line.Contains(',')) {
+        return ",";
+      }
+    }
+
+    return ",";
+  }
+
+  private static void AddNumericRow(string[] fields, List<double> values) {
+    List<double> rowValues = new List<double>();
+
+    foreach (string field in fields) {
+      string valueText = field.Trim();
+
+      if (valueText.Length == 0) {
+        continue;
+      }
+
+      double value;
+
+      if (!TryParseNumber(valueText, out value)) {
+        return;
+      }
+
+      rowValues.Add(value);
+    }
+
+    values.AddRange(rowValues);
   }
 
   private static string CreateGoogleCsvUrl(string sourceUrl) {
@@ -333,9 +482,10 @@ public partial class MainWindow : Window {
     return sourceUrl;
   }
 
-  private static string ReadExcelValues(string filePath) {
+  private static List<double> ReadExcelValues(string filePath) {
     string firstExcelSheetPath = "xl/worksheets/sheet1.xml";
-    string excelValuePattern = @"<v>(.*?)</v>";
+    XNamespace sheetNamespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+    List<double> values = new List<double>();
     using ZipArchive archive = ZipFile.OpenRead(filePath);
     ZipArchiveEntry? sheet = archive.GetEntry(firstExcelSheetPath);
 
@@ -343,30 +493,93 @@ public partial class MainWindow : Window {
       throw new InvalidOperationException("Первый лист Excel не найден.");
     }
 
-    using StreamReader reader = new StreamReader(sheet.Open());
-    string xml = reader.ReadToEnd();
-    MatchCollection values = Regex.Matches(xml, excelValuePattern);
-    List<string> numberTexts = new List<string>();
+    List<string> sharedStrings = ReadSharedStrings(archive, sheetNamespace);
+    using Stream sheetStream = sheet.Open();
+    XDocument document = XDocument.Load(sheetStream);
 
-    foreach (Match value in values) {
-      numberTexts.Add(value.Groups[1].Value);
+    foreach (XElement row in document.Descendants(sheetNamespace + "row")) {
+      List<string> fields = new List<string>();
+
+      foreach (XElement cell in row.Elements(sheetNamespace + "c")) {
+        fields.Add(ReadExcelCell(cell, sharedStrings, sheetNamespace));
+      }
+
+      AddNumericRow(fields.ToArray(), values);
     }
 
-    return string.Join(' ', numberTexts);
+    return values;
+  }
+
+  private static List<string> ReadSharedStrings(ZipArchive archive, XNamespace sheetNamespace) {
+    List<string> sharedStrings = new List<string>();
+    ZipArchiveEntry? entry = archive.GetEntry("xl/sharedStrings.xml");
+
+    if (entry == null) {
+      return sharedStrings;
+    }
+
+    using Stream stringStream = entry.Open();
+    XDocument document = XDocument.Load(stringStream);
+
+    foreach (XElement item in document.Descendants(sheetNamespace + "si")) {
+      string text = "";
+
+      foreach (XElement part in item.Descendants(sheetNamespace + "t")) {
+        text += part.Value;
+      }
+
+      sharedStrings.Add(text);
+    }
+
+    return sharedStrings;
+  }
+
+  private static string ReadExcelCell(XElement cell, List<string> sharedStrings, XNamespace sheetNamespace) {
+    string cellType = (string?)cell.Attribute("t") ?? "";
+    string valueText = cell.Element(sheetNamespace + "v")?.Value ?? "";
+
+    if (cellType == "s") {
+      int stringIndex;
+
+      if (int.TryParse(valueText, out stringIndex) && stringIndex >= 0 && stringIndex < sharedStrings.Count) {
+        return sharedStrings[stringIndex];
+      }
+
+      return "Неверное текстовое значение";
+    }
+
+    if (cellType == "inlineStr") {
+      valueText = "";
+
+      foreach (XElement part in cell.Descendants(sheetNamespace + "t")) {
+        valueText += part.Value;
+      }
+    }
+
+    if (cellType == "b") {
+      return valueText == "1" ? "TRUE" : "FALSE";
+    }
+
+    return valueText;
   }
 
   private static double ParseNumber(string text) {
     double value;
 
-    if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out value)) {
-      return value;
-    }
-
-    if (double.TryParse(text.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out value)) {
+    if (TryParseNumber(text, out value)) {
       return value;
     }
 
     throw new FormatException("Значение «" + text + "» не является числом.");
+  }
+
+  private static bool TryParseNumber(string text, out double value) {
+    if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out value) && double.IsFinite(value)) {
+      return true;
+    }
+
+    return double.TryParse(text.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out value) &&
+           double.IsFinite(value);
   }
 
   private bool TryReadNumber(string text, string label, out double value) {
@@ -421,7 +634,7 @@ public partial class MainWindow : Window {
 
     for (int elementIndex = 0; elementIndex < initialValueCount; ++elementIndex) {
       NumberRow row = new NumberRow();
-      row.Value = Math.Round(_random.NextDouble() * randomValueRange + randomMinimumValue, decimalPlaces);
+      row.ValueText = Math.Round(_random.NextDouble() * randomValueRange + randomMinimumValue, decimalPlaces).ToString(CultureInfo.CurrentCulture);
       _numberRows.Add(row);
     }
   }

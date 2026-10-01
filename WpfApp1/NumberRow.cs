@@ -1,5 +1,5 @@
 namespace WpfApp1;
 
 public class NumberRow {
-  public double Value { get; set; }
+  public string ValueText { get; set; } = "";
 }

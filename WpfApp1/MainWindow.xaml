@@ -44,18 +44,25 @@
         <RowDefinition Height="175" />
       </Grid.RowDefinitions>
       <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
-        <StackPanel>
+        <StackPanel x:Name="InputPanel">
           <GroupBox Header="Исходные данные">
             <StackPanel>
-              <TextBlock Text="Введите числа вручную в таблицу или создайте случайный набор." Foreground="#596579" TextWrapping="Wrap" />
+              <TextBlock Text="Введите числа в таблицу: цифры, минус в начале, запятая или точка. Пустые строки пропускаются." Foreground="#596579" TextWrapping="Wrap" />
               <DataGrid x:Name="NumbersGrid" Height="175" AutoGenerateColumns="False" CanUserAddRows="True" CanUserDeleteRows="True" Margin="0,8,0,4">
                 <DataGrid.Columns>
-                  <DataGridTextColumn Header="Число" Binding="{Binding Value, UpdateSourceTrigger=PropertyChanged}" Width="*" />
+                  <DataGridTextColumn Header="Число" Binding="{Binding ValueText, UpdateSourceTrigger=PropertyChanged}" Width="*">
+                    <DataGridTextColumn.EditingElementStyle>
+                      <Style TargetType="TextBox">
+                        <EventSetter Event="PreviewTextInput" Handler="NumberBoxPreviewTextInput" />
+                        <EventSetter Event="DataObject.Pasting" Handler="NumberBoxPasting" />
+                      </Style>
+                    </DataGridTextColumn.EditingElementStyle>
+                  </DataGridTextColumn>
                 </DataGrid.Columns>
               </DataGrid>
               <Grid Margin="0,6,0,0">
                 <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0"><TextBlock Text="Количество" /><TextBox x:Name="CountBox" Text="20" /></StackPanel>
+                <StackPanel Grid.Column="0"><TextBlock Text="Количество (до 50 000)" /><TextBox x:Name="CountBox" Text="20" /></StackPanel>
                 <StackPanel Grid.Column="1" Margin="5,0"><TextBlock Text="Минимум" /><TextBox x:Name="MinBox" Text="-100" /></StackPanel>
                 <StackPanel Grid.Column="2"><TextBlock Text="Максимум" /><TextBox x:Name="MaxBox" Text="100" /></StackPanel>
               </Grid>
@@ -110,7 +117,7 @@
           <DataGrid.Columns>
             <DataGridTextColumn Header="Алгоритм" Binding="{Binding AlgorithmName}" Width="*" />
             <DataGridTextColumn Header="Чисел" Binding="{Binding ElementCount}" Width="90" />
-            <DataGridTextColumn Header="Время, мс" Binding="{Binding ElapsedMilliseconds}" Width="120" />
+            <DataGridTextColumn Header="Время, мс" Binding="{Binding ElapsedMilliseconds, StringFormat={}{0:F4}}" Width="120" />
             <DataGridTextColumn Header="Итераций" Binding="{Binding IterationCount}" Width="120" />
             <DataGridTextColumn Header="Результат" Binding="{Binding Status}" Width="2*" />
           </DataGrid.Columns>
