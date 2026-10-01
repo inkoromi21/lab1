@@ -31,7 +31,6 @@
     <Border DockPanel.Dock="Top" Background="#213A63" Padding="20,12">
       <StackPanel>
         <TextBlock Text="Сравнение алгоритмов сортировки" Foreground="White" FontSize="24" FontWeight="SemiBold" />
-        <TextBlock Text="Алгоритмы выполняются последовательно. Для набора меньше 50 чисел показывается анимация." Foreground="#D7E4FA" />
       </StackPanel>
     </Border>
     <Grid Margin="10">
@@ -47,7 +46,6 @@
         <StackPanel x:Name="InputPanel">
           <GroupBox Header="Исходные данные">
             <StackPanel>
-              <TextBlock Text="Введите числа в таблицу: цифры, минус в начале, запятая или точка. Пустые строки пропускаются." Foreground="#596579" TextWrapping="Wrap" />
               <DataGrid x:Name="NumbersGrid" Height="175" AutoGenerateColumns="False" CanUserAddRows="True" CanUserDeleteRows="True" Margin="0,8,0,4">
                 <DataGrid.Columns>
                   <DataGridTextColumn Header="Число" Binding="{Binding ValueText, UpdateSourceTrigger=PropertyChanged}" Width="*">
@@ -62,7 +60,7 @@
               </DataGrid>
               <Grid Margin="0,6,0,0">
                 <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition /><ColumnDefinition /></Grid.ColumnDefinitions>
-                <StackPanel Grid.Column="0"><TextBlock Text="Количество (до 50 000)" /><TextBox x:Name="CountBox" Text="20" /></StackPanel>
+                <StackPanel Grid.Column="0"><TextBlock Text="Количество" /><TextBox x:Name="CountBox" Text="20" /></StackPanel>
                 <StackPanel Grid.Column="1" Margin="5,0"><TextBlock Text="Минимум" /><TextBox x:Name="MinBox" Text="-100" /></StackPanel>
                 <StackPanel Grid.Column="2"><TextBlock Text="Максимум" /><TextBox x:Name="MaxBox" Text="100" /></StackPanel>
               </Grid>
@@ -103,7 +101,7 @@
       <GroupBox Grid.Column="1" Header="Визуализация сортировки">
         <Grid>
           <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-          <TextBlock x:Name="ChartTitleText" Text="Выберите алгоритмы и запустите сортировку" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8" />
+          <TextBlock x:Name="ChartTitleText" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8" />
           <ScrollViewer x:Name="ChartScrollViewer" Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
                         VerticalScrollBarVisibility="Disabled" SizeChanged="ChartScrollViewerSizeChanged">
             <ItemsControl x:Name="ChartBars" ItemsSource="{Binding Bars}">

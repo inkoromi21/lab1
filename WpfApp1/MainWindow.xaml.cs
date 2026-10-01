@@ -1,7 +1,6 @@
 using Microsoft.Win32;
 using Microsoft.VisualBasic.FileIO;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.IO.Compression;
@@ -133,19 +132,26 @@ public partial class MainWindow : Window {
       foreach (SortRequest request in selectedAlgorithms) {
         List<double> sortedValues = new List<double>(sourceValues);
         int randomSeed = _random.Next();
-        Stopwatch stopwatch = Stopwatch.StartNew();
-        SortExecution execution = request.SortMethod(sortedValues, isAscending, bogoLimit, false, randomSeed);
-        stopwatch.Stop();
-        double elapsedMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
+        SortRun measuredRun = new SortRun(request, sortedValues, isAscending, bogoLimit, false, randomSeed);
+
+        StatusText.Text = "Измеряется: " + request.AlgorithmName + ".";
+        ChartTitleText.Text = request.AlgorithmName + ": идёт измерение времени";
+
+        SortExecution execution = await Task.Run(measuredRun.Execute);
+        double elapsedMilliseconds = measuredRun.ElapsedMilliseconds;
         SortExecution animationExecution = execution;
 
         if (showAnimation && sourceValues.Count <= MaximumAnimatedElementCount) {
           List<double> animationValues = new List<double>(sourceValues);
-          animationExecution = request.SortMethod(animationValues, isAscending, bogoLimit, true, randomSeed);
+          SortRun animatedRun = new SortRun(request, animationValues, isAscending, bogoLimit, true, randomSeed);
+
+          StatusText.Text = "Подготавливается анимация: " + request.AlgorithmName + ".";
+          animationExecution = await Task.Run(animatedRun.Execute);
         }
 
         await AnimateAlgorithm(request.AlgorithmName, sourceValues, sortedValues, animationExecution);
         AddSortResult(request.AlgorithmName, sourceValues.Count, elapsedMilliseconds, execution);
+        StatusText.Text = "Готово: " + request.AlgorithmName + ".";
       }
 
       StatusText.Text = "Сортировка завершена. Быстрее в этом запуске: " + GetFastestAlgorithmName() + ".";
@@ -162,7 +168,7 @@ public partial class MainWindow : Window {
     _numberRows.Clear();
     _sortResults.Clear();
     _chartData.Bars.Clear();
-    ChartTitleText.Text = "Выберите алгоритмы и запустите сортировку";
+    ChartTitleText.Text = "";
     StatusText.Text = "Данные очищены.";
   }
 
